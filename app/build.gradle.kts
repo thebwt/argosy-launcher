@@ -75,6 +75,16 @@ android {
     }
 
     signingConfigs {
+        // Grind HUD personal builds: fixed key from GRINDHUD_KEYSTORE (CI writes
+        // the repo secret there). Pinned cert is checked in grindhud.yml.
+        create("grindhud") {
+            System.getenv("GRINDHUD_KEYSTORE")?.let {
+                storeFile = file(it)
+                storePassword = "android"
+                keyAlias = "androiddebugkey"
+                keyPassword = "android"
+            }
+        }
         create("release") {
             if (keystorePropertiesFile.exists()) {
                 storeFile = file(keystoreProperties["storeFile"] as String)
@@ -110,7 +120,8 @@ android {
             applicationIdSuffix = ".debug"
             isDebuggable = true
             isJniDebuggable = false
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = if (System.getenv("GRINDHUD_KEYSTORE") != null)
+                signingConfigs.getByName("grindhud") else signingConfigs.getByName("debug")
             matchingFallbacks += listOf("release")
             versionNameSuffix = "-gh" + (System.getenv("GRINDHUD_BUILD") ?: "local")
             buildConfigField("Boolean", "PREFER_BUNDLED_CORES", "true")
