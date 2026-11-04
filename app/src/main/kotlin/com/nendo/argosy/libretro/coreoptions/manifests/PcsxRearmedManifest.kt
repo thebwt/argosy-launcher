@@ -132,6 +132,30 @@ object PcsxRearmedManifest : CoreOptionManifest {
             defaultValue = "disabled",
             description = "Shows the emulated system's internal frame rate on screen"
         ),
+        // Grind HUD: only in thebwt/pcsx_rearmed@grindhud builds. A stock core
+        // ignores these keys, so they are harmless there.
+        CoreOptionDef(
+            key = "pcsx_rearmed_grindhud",
+            displayName = "Grind HUD (Side Panels)",
+            values = listOf("disabled", "enabled"),
+            defaultValue = "disabled",
+            description = "16:9 output with read-only game info in the side bars (needs a .ghud file in system/grindhud/psx)"
+        ),
+        CoreOptionDef(
+            key = "pcsx_rearmed_grindhud_size",
+            displayName = "Grind HUD Text Size",
+            values = listOf("small", "medium", "large"),
+            defaultValue = "small",
+            description = "Larger text fits fewer characters per line",
+            valueLabels = mapOf("small" to "Small", "medium" to "Medium", "large" to "Large")
+        ),
+        CoreOptionDef(
+            key = "pcsx_rearmed_grindhud_meta",
+            displayName = "Grind HUD Meta Info",
+            values = listOf("disabled", "enabled"),
+            defaultValue = "disabled",
+            description = "Also show hidden values such as the encounter counter (still read-only)"
+        ),
         CoreOptionDef(
             key = "pcsx_rearmed_fractional_framerate",
             displayName = "Use Fractional Frame Rate",
