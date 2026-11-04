@@ -1,47 +1,131 @@
-name: Grind HUD debug build
+name: Grind HUD build
 
-# Debug APK for thebwt's Shield, signed with a fixed debug key (repo secret
-# GRINDHUD_DEBUG_KEYSTORE, base64 JKS, standard android/androiddebugkey
-# passwords) so `adb install -r` can update it in place.
+# thebwt's personal Argosy: latest upstream release + the grindhud commits,
+# with the Grind HUD PCSX ReARMed core bundled. Signed with a fixed key (repo
+# secret GRINDHUD_DEBUG_KEYSTORE: base64 JKS, android/androiddebugkey) so it
+# installs over "Argosy DBG" and every later build updates in place.
+#
+# Runs on pushes to grindhud, daily (picks up new upstream releases and core
+# commits), and by hand. Publishes a GitHub release only when something changed.
 
 on:
   push:
     branches: [grindhud]
+  schedule:
+    - cron: '17 11 * * *'
   workflow_dispatch:
+    inputs:
+      force:
+        description: 'Publish even if nothing changed'
+        type: boolean
+        default: false
 
 concurrency:
-  group: grindhud-${{ github.ref }}
-  cancel-in-progress: true
+  group: grindhud-build
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+env:
+  CORE_REPO: thebwt/pcsx_rearmed
+  CORE_BRANCH: grindhud
+  UPSTREAM: https://github.com/rommapp/argosy-launcher.git
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Check out grindhud
+        uses: actions/checkout@v4
         with:
+          ref: grindhud
+          fetch-depth: 0
           submodules: recursive
 
+      - name: Put our commits on top of the latest upstream release
+        id: base
+        run: |
+          set -euo pipefail
+          git config user.name "grindhud-ci"
+          git config user.email "grindhud-ci@users.noreply.github.com"
+          git remote add upstream "$UPSTREAM"
+          git fetch -q upstream main --tags
+          TAG=$(git tag -l 'v*' --sort=-v:refname | grep -Ev -- '-(beta|rc|alpha)' | head -1)
+          OURS=$(git rev-list --reverse upstream/main..HEAD)
+          echo "upstream release: $TAG"
+          echo "our commits:"; git log --oneline upstream/main..HEAD
+          git checkout -q -b build "$TAG"
+          git submodule update --init --recursive -q
+          for c in $OURS; do
+            git cherry-pick -x "$c" || { echo "::error::commit $c does not apply on $TAG"; exit 1; }
+          done
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "ours=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+          echo "patch=$(git diff "$TAG" HEAD | sha256sum | cut -c1-8)" >> "$GITHUB_OUTPUT"
+
+      - name: Build the Grind HUD core (arm64)
+        id: core
+        run: |
+          set -euo pipefail
+          git clone -q --depth 1 -b "$CORE_BRANCH" "https://github.com/$CORE_REPO.git" /tmp/core
+          CORE_SHA=$(git -C /tmp/core rev-parse --short HEAD)
+          "$ANDROID_NDK_HOME/ndk-build" -j"$(nproc)" --no-print-directory -C /tmp/core/jni APP_ABI=arm64-v8a
+          mkdir -p app/src/grindhud/jniLibs/arm64-v8a
+          cp /tmp/core/libs/arm64-v8a/libretro.so app/src/grindhud/jniLibs/arm64-v8a/libpcsx_rearmed_libretro_android.so
+          echo "sha=$CORE_SHA" >> "$GITHUB_OUTPUT"
+
+      - name: Decide whether to publish
+        id: plan
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          RELTAG="gh-${{ steps.base.outputs.tag }}-p${{ steps.base.outputs.patch }}-core${{ steps.core.outputs.sha }}"
+          echo "reltag=$RELTAG" >> "$GITHUB_OUTPUT"
+          if gh release view "$RELTAG" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1 && [ "${{ inputs.force }}" != "true" ]; then
+            echo "publish=false" >> "$GITHUB_OUTPUT"; echo "nothing changed ($RELTAG exists)"
+          else
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Set up JDK 21
+        if: steps.plan.outputs.publish == 'true'
         uses: actions/setup-java@v4
         with:
           java-version: '21'
           distribution: 'temurin'
 
       - name: Setup Gradle
+        if: steps.plan.outputs.publish == 'true'
         uses: gradle/actions/setup-gradle@v4
 
-      - name: Install fixed debug keystore
+      - name: Install fixed signing key
+        if: steps.plan.outputs.publish == 'true'
         env:
           KS: ${{ secrets.GRINDHUD_DEBUG_KEYSTORE }}
         run: |
           mkdir -p ~/.android
           echo "$KS" | base64 -d > ~/.android/debug.keystore
 
-      - name: Build debug APK
-        run: ./gradlew assembleDebug
+      - name: Build APK
+        if: steps.plan.outputs.publish == 'true'
+        env:
+          GRINDHUD_BUILD: ${{ github.run_number }}
+        run: ./gradlew assembleGrindhud
 
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: argosy-grindhud-debug
-          path: app/build/outputs/apk/debug/*.apk
+      - name: Check the core is inside
+        if: steps.plan.outputs.publish == 'true'
+        run: |
+          APK=$(ls app/build/outputs/apk/grindhud/*.apk | head -1)
+          unzip -l "$APK" | grep -q 'lib/arm64-v8a/libpcsx_rearmed_libretro_android.so'
+          cp "$APK" argosy-grindhud.apk
+
+      - name: Publish release
+        if: steps.plan.outputs.publish == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${{ steps.plan.outputs.reltag }}" argosy-grindhud.apk \
+            -R "$GITHUB_REPOSITORY" --target grindhud \
+            --title "Argosy GH ${{ steps.base.outputs.tag }} (run ${{ github.run_number }})" \
+            --notes "Upstream ${{ steps.base.outputs.tag }} + grindhud patch ${{ steps.base.outputs.patch }}; core $CORE_REPO@${{ steps.core.outputs.sha }}."

@@ -58,6 +58,8 @@ android {
         buildConfigField("String", "DISCORD_APP_ID", "\"${envString("DISCORD_APP_ID")}\"")
         buildConfigField("Boolean", "DISCORD_SDK_ENABLED", envString("DISCORD_SDK_ENABLED", "false"))
         buildConfigField("String", "SOCIAL_API_URL", "\"https://api.argosy.dev/\"")
+        // Grind HUD fork: use a core bundled in the APK before a downloaded one.
+        buildConfigField("Boolean", "PREFER_BUNDLED_CORES", "false")
         // QuayPass server signing pubkey(s): comma-separated base64 Ed25519
         // public keys. Multiple values supported for zero-downtime rotation.
         // Empty in dev/CI when no server keypair has been provisioned;
@@ -97,6 +99,21 @@ android {
             } else {
                 signingConfigs.getByName("debug")
             }
+        }
+        // thebwt's personal build: release-optimised, but the same app id and
+        // signing key as the debug build so it installs over "Argosy DBG" and
+        // keeps its data. Debuggable only so `adb shell run-as` still works for
+        // maintenance; native code is built optimised (isJniDebuggable = false).
+        // Ships the Grind HUD PCSX ReARMed core from app/src/grindhud/jniLibs.
+        create("grindhud") {
+            initWith(getByName("release"))
+            applicationIdSuffix = ".debug"
+            isDebuggable = true
+            isJniDebuggable = false
+            signingConfig = signingConfigs.getByName("debug")
+            matchingFallbacks += listOf("release")
+            versionNameSuffix = "-gh" + (System.getenv("GRINDHUD_BUILD") ?: "local")
+            buildConfigField("Boolean", "PREFER_BUNDLED_CORES", "true")
         }
         debug {
             applicationIdSuffix = ".debug"

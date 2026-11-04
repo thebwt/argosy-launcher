@@ -66,3 +66,6 @@ wiki/
 
 # RomM version testbed local env
 testbed/romm/.env
+
+# Grind HUD core is built by CI into this folder
+app/src/grindhud/jniLibs/
