@@ -58,8 +58,8 @@ android {
         buildConfigField("String", "DISCORD_APP_ID", "\"${envString("DISCORD_APP_ID")}\"")
         buildConfigField("Boolean", "DISCORD_SDK_ENABLED", envString("DISCORD_SDK_ENABLED", "false"))
         buildConfigField("String", "SOCIAL_API_URL", "\"https://api.argosy.dev/\"")
-        // Grind HUD fork: use a core bundled in the APK before a downloaded one.
-        buildConfigField("Boolean", "PREFER_BUNDLED_CORES", "false")
+        // Grind HUD fork: fetch PCSX ReARMed from thebwt/pcsx_rearmed releases.
+        buildConfigField("Boolean", "GRINDHUD_CORE_SOURCE", "false")
         // QuayPass server signing pubkey(s): comma-separated base64 Ed25519
         // public keys. Multiple values supported for zero-downtime rotation.
         // Empty in dev/CI when no server keypair has been provisioned;
@@ -115,7 +115,8 @@ android {
         // app can't use AOT code, and with R8 that made startup slow enough to
         // ANR on the Shield. (So no `run-as`; flip it on for one build if data
         // surgery is ever needed - same key, installs in place.)
-        // Ships the Grind HUD PCSX ReARMed core from app/src/grindhud/jniLibs.
+        // PCSX ReARMed downloads from the core fork (LibretroBuildbot.coreZipUrl),
+        // so core changes ship without rebuilding the APK.
         create("grindhud") {
             initWith(getByName("release"))
             applicationIdSuffix = ".debug"
@@ -125,7 +126,7 @@ android {
                 signingConfigs.getByName("grindhud") else signingConfigs.getByName("debug")
             matchingFallbacks += listOf("release")
             versionNameSuffix = "-gh" + (System.getenv("GRINDHUD_BUILD") ?: "local")
-            buildConfigField("Boolean", "PREFER_BUNDLED_CORES", "true")
+            buildConfigField("Boolean", "GRINDHUD_CORE_SOURCE", "true")
         }
         debug {
             applicationIdSuffix = ".debug"

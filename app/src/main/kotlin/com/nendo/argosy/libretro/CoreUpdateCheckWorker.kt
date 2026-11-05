@@ -116,7 +116,7 @@ class CoreUpdateCheckWorker @AssistedInject constructor(
 
     private fun fetchLatestVersion(fileName: String): String? {
         return try {
-            val url = URL("${LibretroBuildbot.baseUrl}/$fileName.zip")
+            val url = URL(LibretroBuildbot.coreZipUrl(fileName))
             val connection = url.openConnection() as HttpURLConnection
             connection.requestMethod = "HEAD"
             connection.connectTimeout = 10_000

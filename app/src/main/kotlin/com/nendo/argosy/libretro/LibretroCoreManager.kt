@@ -140,13 +140,6 @@ class LibretroCoreManager @Inject constructor(
     }
 
     private fun getCorePath(fileName: String): String? {
-        if (com.nendo.argosy.BuildConfig.PREFER_BUNDLED_CORES) {
-            val bundled = File(nativeLibDir, "lib$fileName")
-            if (bundled.exists()) {
-                Log.d(TAG, "Using bundled core (preferred): ${bundled.absolutePath}")
-                return bundled.absolutePath
-            }
-        }
         val downloadedCore = File(downloadedCoresDir, fileName)
         if (downloadedCore.exists()) {
             val coreInfo = LibretroCoreRegistry.getCoreByFileName(fileName)
@@ -193,7 +186,7 @@ class LibretroCoreManager @Inject constructor(
                     compatCoreCache.storeCompatCore(targetFile, existingHash)
                     archiveToHistory(coreInfo.coreId, targetFile, existingHash)
                 }
-                val zipUrl = "${LibretroBuildbot.baseUrl}/${coreInfo.fileName}.zip"
+                val zipUrl = LibretroBuildbot.coreZipUrl(coreInfo.fileName)
 
                 Log.i(TAG, "Downloading ${coreInfo.displayName}: $zipUrl")
                 Log.i(TAG, "Device ABI: ${LibretroBuildbot.deviceAbi}")

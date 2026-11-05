@@ -1,12 +1,13 @@
 name: Grind HUD build
 
-# thebwt's personal Argosy: latest upstream release + the grindhud commits,
-# with the Grind HUD PCSX ReARMed core bundled. Signed with a fixed key (repo
+# thebwt's personal Argosy: latest upstream release + the grindhud commits.
+# PCSX ReARMed is not bundled: the app downloads it from the core fork's
+# grindhud-android release (built by that repo's own workflow). Signed with a fixed key (repo
 # secret GRINDHUD_DEBUG_KEYSTORE: base64 JKS, android/androiddebugkey) so it
 # installs over "Argosy DBG" and every later build updates in place.
 #
-# Runs on pushes to grindhud, daily (picks up new upstream releases and core
-# commits), and by hand. Publishes a GitHub release only when something changed.
+# Runs on pushes to grindhud, daily (picks up new upstream releases), and by
+# hand. Publishes a GitHub release only when something changed.
 
 on:
   push:
@@ -28,8 +29,6 @@ permissions:
   contents: write
 
 env:
-  CORE_REPO: thebwt/pcsx_rearmed
-  CORE_BRANCH: grindhud
   UPSTREAM: https://github.com/rommapp/argosy-launcher.git
   # SHA-256 of the androiddebugkey cert in GRINDHUD_DEBUG_KEYSTORE
   EXPECTED_CERT: 6f43fb451c385192abbd29b0477bc6c3b55d822b9f0c0fafdb9923367640bd84
@@ -66,23 +65,12 @@ jobs:
           echo "ours=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
           echo "patch=$(git diff "$TAG" HEAD | sha256sum | cut -c1-8)" >> "$GITHUB_OUTPUT"
 
-      - name: Build the Grind HUD core (arm64)
-        id: core
-        run: |
-          set -euo pipefail
-          git clone -q --depth 1 -b "$CORE_BRANCH" "https://github.com/$CORE_REPO.git" /tmp/core
-          CORE_SHA=$(git -C /tmp/core rev-parse --short HEAD)
-          "$ANDROID_NDK_HOME/ndk-build" -j"$(nproc)" --no-print-directory -C /tmp/core/jni APP_ABI=arm64-v8a
-          mkdir -p app/src/grindhud/jniLibs/arm64-v8a
-          cp /tmp/core/libs/arm64-v8a/libretro.so app/src/grindhud/jniLibs/arm64-v8a/libpcsx_rearmed_libretro_android.so
-          echo "sha=$CORE_SHA" >> "$GITHUB_OUTPUT"
-
       - name: Decide whether to publish
         id: plan
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          RELTAG="gh-${{ steps.base.outputs.tag }}-p${{ steps.base.outputs.patch }}-core${{ steps.core.outputs.sha }}"
+          RELTAG="gh-${{ steps.base.outputs.tag }}-p${{ steps.base.outputs.patch }}"
           echo "reltag=$RELTAG" >> "$GITHUB_OUTPUT"
           if gh release view "$RELTAG" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1 && [ "${{ inputs.force }}" != "true" ]; then
             echo "publish=false" >> "$GITHUB_OUTPUT"; echo "nothing changed ($RELTAG exists)"
@@ -120,11 +108,10 @@ jobs:
           echo "kotlin.compiler.execution.strategy=in-process" >> gradle.properties
           ./gradlew assembleGrindhud
 
-      - name: Check the core is inside
+      - name: Check the signature
         if: steps.plan.outputs.publish == 'true'
         run: |
           APK=$(ls app/build/outputs/apk/grindhud/*.apk | head -1)
-          unzip -l "$APK" | grep -q 'lib/arm64-v8a/libpcsx_rearmed_libretro_android.so'
           # every build must carry the same certificate or it can't update in place
           SIGNER=$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort -V | tail -1)apksigner
           GOT=$("$SIGNER" verify --print-certs "$APK" | sed -n 's/.*certificate SHA-256 digest: //p' | head -1)
@@ -140,4 +127,4 @@ jobs:
           gh release create "${{ steps.plan.outputs.reltag }}" argosy-grindhud.apk \
             -R "$GITHUB_REPOSITORY" --target grindhud \
             --title "Argosy GH ${{ steps.base.outputs.tag }} (run ${{ github.run_number }})" \
-            --notes "Upstream ${{ steps.base.outputs.tag }} + grindhud patch ${{ steps.base.outputs.patch }}; core $CORE_REPO@${{ steps.core.outputs.sha }}."
+            --notes "Upstream ${{ steps.base.outputs.tag }} + grindhud patch ${{ steps.base.outputs.patch }}. PCSX ReARMed downloads from thebwt/pcsx_rearmed release grindhud-android."

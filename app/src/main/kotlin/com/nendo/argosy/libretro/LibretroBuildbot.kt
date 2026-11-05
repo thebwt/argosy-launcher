@@ -54,4 +54,23 @@ object LibretroBuildbot {
 
     val baseUrl: String
         get() = "https://buildbot.libretro.com/nightly/android/latest/$deviceAbi"
+
+    /**
+     * Grind HUD build: cores fetched from somewhere other than the libretro
+     * buildbot. Same layout (<file>.zip holding <file>) and the update check
+     * keys off Last-Modified, which GitHub release assets carry.
+     */
+    private val grindhudCoreUrls = mapOf(
+        "arm64-v8a" to mapOf(
+            "pcsx_rearmed_libretro_android.so" to
+                "https://github.com/thebwt/pcsx_rearmed/releases/download/grindhud-android/pcsx_rearmed_libretro_android.so.zip"
+        )
+    )
+
+    fun coreZipUrl(fileName: String): String {
+        if (com.nendo.argosy.BuildConfig.GRINDHUD_CORE_SOURCE) {
+            grindhudCoreUrls[deviceAbi]?.get(fileName)?.let { return it }
+        }
+        return "$baseUrl/$fileName.zip"
+    }
 }
