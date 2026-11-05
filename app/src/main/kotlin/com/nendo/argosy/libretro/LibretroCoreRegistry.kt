@@ -626,7 +626,11 @@ object LibretroCoreRegistry {
         return hwCoreSaveStatesEnabled || !serializeMayCrash(coreId)
     }
 
-    fun getCoreByFileName(fileName: String): CoreInfo? = cores.find { it.fileName == fileName }
+    // Cores bundled in the APK are extracted as lib<fileName> (Grind HUD build).
+    fun getCoreByFileName(fileName: String): CoreInfo? =
+        cores.find { it.fileName == fileName }
+            ?: fileName.takeIf { it.startsWith("lib") }?.removePrefix("lib")
+                ?.let { stripped -> cores.find { it.fileName == stripped } }
 
     fun getCoresForPlatform(platformSlug: String): List<CoreInfo> {
         val canonical = PlatformDefinitions.getCanonicalSlug(platformSlug)

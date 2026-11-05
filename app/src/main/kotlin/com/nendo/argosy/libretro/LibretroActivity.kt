@@ -2791,7 +2791,7 @@ class LibretroActivity : ComponentActivity() {
 
     private fun resolveCoreIdFromPath(path: String): String? {
         val fileName = File(path).name
-        val known = LibretroCoreRegistry.getAllCores().firstOrNull { it.fileName == fileName }
+        val known = LibretroCoreRegistry.getCoreByFileName(fileName)
         if (known != null) return known.coreId
         return fileName.removeSuffix("_libretro_android.so")
             .removeSuffix("_libretro.so")

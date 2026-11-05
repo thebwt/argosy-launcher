@@ -110,15 +110,16 @@ android {
                 signingConfigs.getByName("debug")
             }
         }
-        // thebwt's personal build: release-optimised, but the same app id and
-        // signing key as the debug build so it installs over "Argosy DBG" and
-        // keeps its data. Debuggable only so `adb shell run-as` still works for
-        // maintenance; native code is built optimised (isJniDebuggable = false).
+        // thebwt's personal build: release-optimised, app id .debug, fixed
+        // signing key (signingConfigs.grindhud). Not debuggable: a debuggable
+        // app can't use AOT code, and with R8 that made startup slow enough to
+        // ANR on the Shield. (So no `run-as`; flip it on for one build if data
+        // surgery is ever needed - same key, installs in place.)
         // Ships the Grind HUD PCSX ReARMed core from app/src/grindhud/jniLibs.
         create("grindhud") {
             initWith(getByName("release"))
             applicationIdSuffix = ".debug"
-            isDebuggable = true
+            isDebuggable = false
             isJniDebuggable = false
             signingConfig = if (System.getenv("GRINDHUD_KEYSTORE") != null)
                 signingConfigs.getByName("grindhud") else signingConfigs.getByName("debug")
